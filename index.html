@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>油綜飛鏢機 - 智能登記系統</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        jp: {
+                            bg: '#FAF8F5',      // 和紙白 (Shiro-tae)
+                            card: '#FFFFFF',    // 純白
+                            sumi: '#2C2A29',    // 墨黑 (Sumi)
+                            slate: '#686B6D',   // 石板灰 (Ishiban)
+                            border: '#E6E2DC',  // 淺砂褐 (Suna)
+                            indigo: '#2B4C7E',  // 藍靛染 (Ai-iro) - Primary Button
+                            indigoLight: '#F0F3F8',
+                            matcha: '#5A7247',  // 抹茶/鶯色 (Uguisu) - Success / Active
+                            matchaLight: '#F2F5F0',
+                            sakura: '#D08285',  // 櫻粉/小豆紅 (Sakura) - Active/Warning
+                            sakuraLight: '#FAF0F0',
+                            gold: '#C49A45'     // 金秋葉 (Akiha) - Accents
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS (XLSX) for Real Excel Export Support -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        /* 匯入 Google Fonts 作為備用無襯線字型 */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+        
+        body {
+            /* 優先使用微軟正黑體，確保介面呈現俐落專業的黑體風格 */
+            font-family: "Microsoft JhengHei", "Heiti TC", "Noto Sans TC", system-ui, -apple-system, sans-serif;
+            background-color: #FAF8F5;
+            color: #2C2A29;
+            -webkit-tap-highlight-color: transparent; /* 移除行動端點按時的藍色高亮 */
+        }
+        
+        /* 統一所有標題與控制項套用微軟正黑體 */
+        .jp-serif, button, input, select, textarea, span, h1, h2, h3, h4, td, th {
+            font-family: "Microsoft JhengHei", "Heiti TC", "Noto Sans TC", sans-serif;
+        }
+
+        /* 響應式滾動條美化 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #FAF8F5;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #E6E2DC;
+            border-radius: 99px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #2B4C7E;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .animate-ping {
+            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+
+        @keyframes ping {
+            75%, 100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+    <!-- 頂部官方單位名稱置中顯示區 (統一微軟正黑體，分兩行顯示且為藍色，無圖片依賴) -->
+    <div class="bg-white border-b border-jp-border py-5 px-4 flex flex-col justify-center items-center gap-1.5 shadow-sm min-h-[70px] text-center select-none">
+        <span class="text-jp-indigo font-black text-base sm:text-lg tracking-widest">香港小童群益會</span>
+        <span class="text-jp-indigo font-black text-base sm:text-lg tracking-widest">賽馬會油塘青少年綜合服務中心</span>
+    </div>
+
+    <!-- 系統控制與時間欄 -->
+    <header class="border-b border-jp-border bg-white/95 sticky top-0 z-40 shadow-[0_1px_5px_rgba(44,42,41,0.02)]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <!-- 標誌圖標：安全處理，出錯時呼叫 JS 函數防止 inline 嵌套引號 -->
+                <div class="bg-jp-indigoLight w-12 h-12 rounded-full border border-jp-indigo/10 flex items-center justify-center overflow-hidden p-1 shrink-0">
+                    <span class="text-2xl">🎯</span>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-wider text-jp-sumi flex items-center gap-1.5">
+                        油綜飛鏢機 <span class="text-xs font-medium bg-jp-indigo text-white px-2.5 py-0.5 rounded-full">智能登記</span>
+                    </h1>
+                    <p class="text-xs text-jp-slate uppercase tracking-widest font-sans">Yau Tong Dart Board System</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <!-- 連線狀態指示燈 -->
+                <div class="hidden xs:flex items-center space-x-1.5 bg-jp-matchaLight text-jp-matcha border border-jp-matcha/20 px-3 py-1 rounded-full text-sm font-bold">
+                    <span class="w-2 h-2 rounded-full bg-jp-matcha animate-ping"></span>
+                    <span>連線中</span>
+                </div>
+                <!-- 完整日期與即時秒鐘時間 -->
+                <div id="liveClock" class="text-sm font-mono bg-jp-indigoLight border border-jp-indigo/10 px-4 py-2 rounded-lg text-jp-indigo font-bold whitespace-nowrap shadow-sm">
+                    ----年--月--日 (-) --:--:--
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        
+        <!-- 現場借用登記板塊：飛鏢機 A & 飛鏢機 B 狀態、名單與即日日程 (個別板塊完全置中 + 雙色主題顯示) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- 飛鏢機 A (藍靛染藍色主題，內容完全置中) -->
+            <div class="bg-white border border-jp-border rounded-2xl p-5 sm:p-6 relative overflow-hidden shadow-sm transition-all hover:shadow-md flex flex-col items-center justify-between space-y-5">
+                <div class="w-full flex flex-col items-center">
+                    <div class="flex flex-col items-center mb-4 border-b border-jp-border pb-3 w-full text-center">
+                        <span class="text-xs font-bold text-jp-indigo uppercase tracking-wider bg-jp-indigoLight px-3 py-0.5 rounded border border-jp-indigo/10">Machine A</span>
+                        <h2 class="text-2xl sm:text-3xl font-black text-jp-indigo mt-1">飛鏢機 A</h2>
+                        <div id="statusBadge-A" class="mt-2 px-3 py-1 rounded text-sm font-bold flex items-center justify-center space-x-1">
+                            <!-- 狀態動態載入 -->
+                        </div>
+                    </div>
+
+                    <!-- 當前使用名單 (⚡ 投擲中) -->
+                    <div id="activeUserBox-A" class="space-y-3 min-h-[90px] w-full flex flex-col items-center justify-center relative z-10">
+                        <!-- 當前投擲中會員名單動態載入 -->
+                    </div>
+                </div>
+
+                <!-- 即日日程 (📅 今日登記) -->
+                <div class="border-t border-jp-border/60 pt-4 space-y-2 w-full text-center">
+                    <span class="text-xs font-bold text-jp-slate uppercase tracking-wider block mb-1">📅 今日登記日程 (飛鏢機 A)</span>
+                    <div id="todayScheduleList-A" class="space-y-2 max-h-[180px] overflow-y-auto pr-1 text-base w-full">
+                        <!-- 登記清單動態載入 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 飛鏢機 B (抹茶綠綠色主題，內容完全置中) -->
+            <div class="bg-white border border-jp-border rounded-2xl p-5 sm:p-6 relative overflow-hidden shadow-sm transition-all hover:shadow-md flex flex-col items-center justify-between space-y-5">
+                <div class="w-full flex flex-col items-center">
+                    <div class="flex flex-col items-center mb-4 border-b border-jp-border pb-3 w-full text-center">
+                        <span class="text-xs font-bold text-jp-matcha uppercase tracking-wider bg-jp-matchaLight px-3 py-0.5 rounded border border-jp-matcha/10">Machine B</span>
+                        <h2 class="text-2xl sm:text-3xl font-black text-jp-matcha mt-1">飛鏢機 B</h2>
+                        <div id="statusBadge-B" class="mt-2 px-3 py-1 rounded text-sm font-bold flex items-center justify-center space-x-1">
+                            <!-- 狀態動態載入 -->
+                        </div>
+                    </div>
+
+                    <!-- 當前使用名單 (⚡ 投擲中) -->
+                    <div id="activeUserBox-B" class="space-y-3 min-h-[90px] w-full flex flex-col items-center justify-center relative z-10">
+                        <!-- 當前投擲中會員名單動態載入 -->
+                    </div>
+                </div>
+
+                <!-- 即日日程 (📅 今日登記) -->
+                <div class="border-t border-jp-border/60 pt-4 space-y-2 w-full text-center">
+                    <span class="text-xs font-bold text-jp-slate uppercase tracking-wider block mb-1">📅 今日登記日程 (飛鏢機 B)</span>
+                    <div id="todayScheduleList-B" class="space-y-2 max-h-[180px] overflow-y-auto pr-1 text-base w-full">
+                        <!-- 登記清單動態載入 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 導航分頁籤 (流動端觸控優化) -->
+        <div class="border-b border-jp-border">
+            <nav class="flex space-x-1 sm:space-x-6 overflow-x-auto pb-px scrollbar-none" aria-label="Tabs">
+                <button onclick="switchTab('bookingTab')" id="btn-bookingTab" class="tab-btn flex-1 sm:flex-initial py-4 px-3.5 border-b-2 font-bold text-base whitespace-nowrap transition-all flex items-center justify-center gap-2 text-jp-indigo border-jp-indigo">
+                    <i data-lucide="edit-3" class="w-5 h-5"></i> 新增即場登記
+                </button>
+                <button onclick="switchTab('sheetTab')" id="btn-sheetTab" class="tab-btn flex-1 sm:flex-initial py-4 px-3.5 border-b-2 font-bold text-base whitespace-nowrap transition-all flex items-center justify-center gap-2 text-jp-slate border-transparent">
+                    <i data-lucide="table" class="w-5 h-5"></i> 飛鏢機登記表
+                </button>
+                <button onclick="switchTab('rulesTab')" id="btn-rulesTab" class="tab-btn flex-1 sm:flex-initial py-4 px-3.5 border-b-2 font-bold text-base whitespace-nowrap transition-all flex items-center justify-center gap-2 text-jp-slate border-transparent">
+                    <i data-lucide="shield-alert" class="w-5 h-5"></i> 使用守則
+                </button>
+            </nav>
+        </div>
+
+        <!-- 分頁內容：新增即場登記表單 -->
+        <div id="bookingTab" class="tab-content block animate-fadeIn space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- 會員登記表單 -->
+                <div class="lg:col-span-2 bg-white border border-jp-border rounded-2xl p-5 sm:p-6 space-y-6 shadow-sm">
+                    <div class="border-b border-jp-border pb-4">
+                        <h3 class="text-2xl font-bold text-jp-sumi flex items-center gap-2">
+                            <i data-lucide="user-plus" class="text-jp-indigo"></i> 借用登記 (個人登記)
+                        </h3>
+                        <p class="text-sm text-jp-slate mt-1.5">請填寫登記資料。本系統僅開放個人身份登記，當日單一時段若未滿 4 人，可與其他會員拼機共用。</p>
+                    </div>
+
+                    <form id="bookingForm" onsubmit="handleFormSubmit(event)" class="space-y-5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <!-- 登記日期 (只限今日，不可更改) -->
+                            <div>
+                                <label class="block text-sm font-bold text-orange-600 uppercase tracking-wider mb-2">登記日期 (只限今日)</label>
+                                <input type="text" id="bookDate" readonly class="w-full bg-jp-bg border border-jp-border rounded-xl px-4 py-3 text-base text-jp-sumi focus:outline-none opacity-80 cursor-not-allowed font-bold">
+                            </div>
+
+                            <!-- 機台選擇 -->
+                            <div>
+                                <label class="block text-sm font-bold text-orange-600 uppercase tracking-wider mb-2">指定飛鏢機</label>
+                                <select id="bookMachine" required onchange="updateSlotCapacityNotice()" class="w-full bg-jp-bg border border-jp-border rounded-xl px-4 py-3 text-base text-jp-sumi focus:outline-none focus:ring-1 focus:ring-jp-indigo">
+                                    <option value="any">自動分配機台 (推薦)</option>
+                                    <option value="A">飛鏢機 A (指定)</option>
+                                    <option value="B">飛鏢機 B (指定)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <!-- 會員姓名 -->
+                            <div>
+                                <label class="block text-sm font-bold text-orange-600 uppercase tracking-wider mb-2">
+                                    會員姓名 (中文正楷) <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" id="memberName" required placeholder="例如：陳大文" class="w-full bg-jp-bg border border-jp-border rounded-xl px-4 py-3 text-base text-jp-sumi focus:outline-none focus:ring-1 focus:ring-jp-indigo">
+                            </div>
+
+                            <!-- 飛鏢使用登記編號 -->
+                            <div>
+                                <label class="block text-sm font-bold text-orange-600 uppercase tracking-wider mb-2">
+                                    飛鏢使用登記編號 <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" id="memberId" required placeholder="例如：DM2605-001" class="w-full bg-jp-bg border border-jp-border rounded-xl px-4 py-3 text-base text-jp-sumi focus:outline-none focus:ring-1 focus:ring-jp-indigo">
+                            </div>
+                        </div>
+
+                        <!-- 開始時段 (重新排版，無人數選擇) -->
+                        <div>
+                            <label class="block text-sm font-bold text-orange-600 uppercase tracking-wider mb-2">借用開始時間</label>
+                            <select id="bookTime" required onchange="updateSlotCapacityNotice()" class="w-full bg-jp-bg border border-jp-border rounded-xl px-4 py-3 text-base text-jp-sumi focus:outline-none focus:ring-1 focus:ring-jp-indigo">
+                                <option value="">請先載入登記時段...</option>
+                            </select>
+                            <p id="timeSlotNotice" class="text-xs text-jp-gold font-bold mt-1.5 hidden"></p>
+                        </div>
+
+                        <!-- 拼機共享提醒 -->
+                        <div id="sharedNotice" class="hidden animate-fadeIn">
+                            <!-- 登記重疊時自動渲染 -->
+                        </div>
+
+                        <!-- 借用資格確認 -->
+                        <div class="bg-jp-bg p-4 rounded-xl border border-jp-border">
+                            <label class="flex items-center gap-3 cursor-pointer py-1.5 text-jp-sumi">
+                                <input type="checkbox" id="checkEligibility" required class="w-5 h-5 rounded text-jp-indigo focus:ring-jp-indigo border-jp-border bg-white shrink-0">
+                                <span class="text-sm font-bold text-orange-600">本人確認符合飛鏢機借用資格 <span class="text-red-500">*</span></span>
+                            </label>
+                        </div>
+
+                        <!-- 提交 -->
+                        <button type="submit" class="w-full bg-jp-indigo hover:bg-jp-indigo/95 text-white font-bold py-3.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm">
+                            <i data-lucide="check-circle2" class="w-5 h-5"></i> 確認登記並送出
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 側邊共享須知 -->
+                <div class="space-y-6">
+                    <div class="bg-jp-indigoLight border border-jp-indigo/10 rounded-2xl p-5 space-y-4 shadow-sm">
+                        <h4 class="text-base font-bold text-jp-indigo flex items-center gap-2">
+                            <span class="text-xl">🏮</span> 飛鏢機共享須知
+                        </h4>
+                        <ul class="text-sm text-jp-sumi space-y-3 list-disc pl-4 leading-relaxed">
+                            <li><b class="text-jp-indigo">個人登記制：</b>每時段每台機最大容量為 <b>4 人</b>（個人獨立登記）。未滿額時，歡迎與其他會員拼機共用。</li>
+                            <li><b class="text-jp-indigo">不設預約預留：</b>本中心飛鏢房只限<b>當日即場登記</b>使用，先到先得。</li>
+                            <li><b class="text-jp-indigo">借用時數：</b>每次個人登記使用時間為 <b>30 分鐘</b>。</li>
+                            <li><b class="text-jp-indigo">開放時段：</b>
+                                <br><span class="text-jp-slate font-mono pl-2 block">• 週一、週二：16:00 - 17:30</span>
+                                <span class="text-jp-slate font-mono pl-2 block">• 週三至週六：19:30 - 21:30</span>
+                            </li>
+                            <li>請於借用開始前前往櫃檯辦理登記確認。</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 分頁內容：飛鏢機登記表電子記錄 (新增密碼鎖屏保護區) -->
+        <div id="sheetTab" class="tab-content hidden animate-fadeIn">
+            <!-- 密碼鎖定解鎖介面 (密碼：0335) -->
+            <div id="passwordGate" class="bg-white border border-jp-border rounded-2xl p-8 max-w-md mx-auto text-center shadow-md space-y-6 animate-fadeIn">
+                <div class="w-16 h-16 bg-jp-indigoLight rounded-full flex items-center justify-center mx-auto text-jp-indigo">
+                    <i data-lucide="lock" class="w-8 h-8"></i>
+                </div>
+                <div class="space-y-2">
+                    <h3 class="text-xl font-black text-jp-sumi">飛鏢登記表安全認證</h3>
+                    <p class="text-sm text-jp-slate leading-relaxed">此區域包含會員機密借用記錄，同工需輸入密碼解鎖方可瀏覽與管理數據。</p>
+                </div>
+                <div class="space-y-4">
+                    <input type="password" id="gatePassword" placeholder="請輸入 4 位認證密碼" class="w-full bg-jp-bg border border-jp-border rounded-xl px-4 py-3 text-center text-xl text-jp-sumi focus:outline-none focus:ring-1 focus:ring-jp-indigo font-bold tracking-widest">
+                    <button onclick="verifyGatePassword()" class="w-full bg-jp-indigo hover:bg-jp-indigo/95 text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2">
+                        <i data-lucide="unlock" class="w-5 h-5"></i> 解鎖登記表
+                    </button>
+                </div>
+            </div>
+
+            <!-- 真正受密碼保護的登記表內容 (驗證成功後移除 hidden 樣式) -->
+            <div id="securedSheetContent" class="hidden bg-white border border-jp-border rounded-2xl p-4 sm:p-6 space-y-4 shadow-sm">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-jp-border pb-4">
+                    <div>
+                        <h3 class="text-2xl font-bold text-jp-sumi flex items-center gap-2">
+                            <i data-lucide="table" class="text-jp-indigo"></i> 飛鏢機登記表 (電子檔案)
+                        </h3>
+                        <p class="text-sm text-jp-slate mt-1">同步記錄所有即場登記、現場使用狀態，適用於同工查閱。</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2.5 items-center">
+                        <!-- 安全登出/重新上鎖按鈕 -->
+                        <button onclick="lockSheetGate()" class="bg-jp-sakuraLight hover:bg-jp-sakura/10 text-jp-sakura border border-jp-sakura/25 text-sm px-4 py-3 rounded-xl flex items-center gap-1.5 transition-all font-semibold shadow-sm">
+                            <i data-lucide="lock" class="w-4 h-4"></i> 重新上鎖
+                        </button>
+                        <!-- 自動匯出當日登記記錄 -->
+                        <button onclick="exportTodayRecords()" class="bg-jp-indigo hover:bg-jp-indigo/95 text-white text-sm px-4 py-3 rounded-xl flex items-center gap-1.5 transition-all font-semibold shadow-sm">
+                            <i data-lucide="download" class="w-4 h-4"></i> 📥 匯出今日登記記錄 (.xlsx)
+                        </button>
+                        <button onclick="exportToExcel()" class="bg-jp-matcha hover:bg-jp-matcha/95 text-white text-sm px-4 py-3 rounded-xl flex items-center gap-1.5 transition-all font-semibold shadow-sm">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> 匯出全部 Excel (.xlsx)
+                        </button>
+                        <button onclick="resetMockData()" class="bg-jp-sakuraLight hover:bg-jp-sakura/90 text-jp-sakura border border-jp-sakura/25 text-sm px-4 py-3 rounded-xl flex items-center gap-1.5 transition-all font-semibold shadow-sm">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i> 還原測試數據
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 篩選列 -->
+                <div class="flex flex-wrap items-center gap-3 bg-jp-bg p-4 rounded-xl border border-jp-border text-sm text-jp-sumi">
+                    <span class="font-bold uppercase tracking-wider text-jp-slate">篩選設定：</span>
+                    <label class="flex items-center gap-2">
+                        <span>日期</span>
+                        <input type="date" id="filterDate" onchange="renderSheetTable()" class="bg-white border border-jp-border rounded-lg px-2.5 py-1.5 text-sm text-jp-sumi focus:outline-none focus:ring-1 focus:ring-jp-indigo">
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <span>飛鏢機</span>
+                        <select id="filterMachine" onchange="renderSheetTable()" class="bg-white border border-jp-border rounded-lg px-2.5 py-1.5 text-sm text-jp-sumi focus:outline-none focus:ring-1 focus:ring-jp-indigo">
+                            <option value="all">全部</option>
+                            <option value="A">飛鏢機 A</option>
+                            <option value="B">飛鏢機 B</option>
+                        </select>
+                    </label>
+                    <button onclick="clearFilters()" class="text-jp-slate hover:text-jp-sumi transition-all ml-auto sm:ml-0 py-1 px-2.5">清除過濾</button>
+                </div>
+
+                <!-- 電腦與平板表格檢視 -->
+                <div class="hidden md:block overflow-x-auto rounded-xl border border-jp-border">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-jp-bg text-jp-slate border-b border-jp-border">
+                                <th class="p-3.5 font-bold">登記日期</th>
+                                <th class="p-3.5 font-bold">開始時間</th>
+                                <th class="p-3.5 font-bold">飛鏢機</th>
+                                <th class="p-3.5 font-bold">飛鏢使用登記編號</th>
+                                <th class="p-3.5 font-bold">會員姓名</th>
+                                <th class="p-3.5 font-bold text-center">人數</th>
+                                <th class="p-3.5 font-bold text-center">續借</th>
+                                <th class="p-3.5 font-bold">備註</th>
+                                <th class="p-3.5 font-bold text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sheetTableBody" class="divide-y divide-jp-border">
+                            <!-- 記錄 -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 手機版卡片式檢視 -->
+                <div class="md:hidden space-y-3" id="mobileSheetView">
+                    <!-- 卡片 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 分頁內容：使用守則 -->
+        <div id="rulesTab" class="tab-content hidden animate-fadeIn">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- 守則主體內容 -->
+                <div class="md:col-span-2 bg-white border border-jp-border rounded-2xl p-5 sm:p-6 space-y-6 shadow-sm">
+                    <div class="border-b border-jp-border pb-4 flex items-center gap-3">
+                        <span class="text-3xl">🎯</span>
+                        <div>
+                            <h3 class="text-3xl font-black text-jp-sumi">
+                                飛鏢機使用守則
+                            </h3>
+                            <p class="text-sm text-jp-slate mt-1">請所有會員共同遵守以下守則，維持優質、和諧的活動環境。</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6 text-jp-sumi text-base leading-relaxed">
+                        <!-- 借用時間與對象 -->
+                        <div class="space-y-3">
+                            <h4 class="text-lg font-bold text-jp-indigo flex items-center gap-2">
+                                <i data-lucide="clock" class="w-5 h-5"></i> 一、 借用方法及時間
+                            </h4>
+                            <div class="bg-jp-bg p-4 rounded-xl border border-jp-border space-y-4">
+                                <div>
+                                    <span class="text-sm text-jp-slate font-bold block mb-1">📅 開放時段：</span>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                                        <div class="bg-white p-2.5 rounded-lg border border-jp-border font-mono text-sm">
+                                            <b>星期一、二：</b> 16:00 – 17:30
+                                        </div>
+                                        <div class="bg-white p-2.5 rounded-lg border border-jp-border font-mono text-sm">
+                                            <b>星期三、四、五、六：</b> 19:30 – 21:30
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-sm space-y-1.5 pt-3 border-t border-jp-border">
+                                    <p>👥 <b>借用資格：</b> 身高 <b>150cm 或以上</b> 📏 ｜ 3-24歲中心會員及其直屬家長。</p>
+                                    <p class="text-jp-gold font-bold">⚠️ <b>重要前提：</b> 借用者必須已完成<b>「飛鏢啟動課」</b>。</p>
+                                    <p>📝 <b>登記與拼機：</b> 先到先得。<b>本中心飛鏢房不設跨日或提前預約，只限當日即場登記使用。</b>每次個人登記限用 30 分鐘。</p>
+                                    <p>👥 <b>人數上限：</b> 場內最多同時容納 <b>2 組</b>進行，每部機最多容納 4 人共用（限個人登記拼機）。</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 投擲及安全規定 -->
+                        <div class="space-y-3">
+                            <h4 class="text-lg font-bold text-jp-gold flex items-center gap-2">
+                                <i data-lucide="shield-alert" class="w-5 h-5"></i> 二、 投擲注意事項 ⚠️ 及場地規則 🚫
+                            </h4>
+                            <div class="bg-jp-bg p-4 rounded-xl border border-jp-border space-y-3 text-sm leading-relaxed">
+                                <div class="flex items-start gap-2.5">
+                                    <span class="bg-jp-sakura text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">1</span>
+                                    <p>投擲時，其他參加者必需站/安坐在安全區域，<b>嚴禁跨越及橫越</b>，以免發生意外。</p>
+                                </div>
+                                <div class="flex items-start gap-2.5">
+                                    <span class="bg-jp-indigo text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">2</span>
+                                    <p><b>拔鏢技巧：</b>取回飛鏢時，請<b>順時針旋轉並輕輕拔出</b>，切勿強行硬扯，以保護感應器。</p>
+                                </div>
+                                <div class="flex items-start gap-2.5">
+                                    <span class="bg-jp-sakura text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">3</span>
+                                    <p><b>僅限使用軟式飛鏢 (Soft Darts)。</b>嚴禁使用硬式（鋼尖）飛鏢，以免永久損毀電子靶面。</p>
+                                </div>
+                                <div class="flex items-start gap-2.5">
+                                    <span class="bg-jp-gold text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">4</span>
+                                    <p>若遇機件故障或鏢尖斷裂留在靶面上，<b>請立即通知當值同工</b>，切勿自行拆解。</p>
+                                </div>
+                                <div class="flex items-start gap-2.5">
+                                    <span class="bg-jp-indigo text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">5</span>
+                                    <p>使用完畢後，請將飛鏢交還櫃檯，並將現場物資還原及擺放整齊（如飛鏢機毯、小圓凳及桌子）。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 側邊小版塊 -->
+                <div class="space-y-6">
+                    <div class="bg-jp-indigoLight border border-jp-indigo/10 rounded-2xl p-6 text-center space-y-4 shadow-sm">
+                        <span class="text-5xl">🌸</span>
+                        <h4 class="text-xl font-bold text-jp-sumi">溫馨提醒</h4>
+                        <p class="text-sm text-jp-sumi/90 leading-relaxed">
+                            飛鏢運動旨在舒壓與交流，請維持良好的運動禮儀，共同營造美好的活動氣氛。
+                        </p>
+                        <p class="text-xs text-jp-sakura font-bold">
+                            📌 如有違反以上使用守則，中心同工有權終止該次借用。
+                        </p>
+                        <div class="pt-4 border-t border-jp-border text-xs text-jp-slate">
+                            修訂日期：6/5/2026
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 訊息提示對話框 -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-white border border-jp-border p-4 rounded-xl shadow-xl flex items-start gap-3 max-w-sm transform translate-y-20 opacity-0 transition-all duration-300">
+        <div id="toastIcon" class="p-1.5 rounded"></div>
+        <div>
+            <h4 id="toastTitle" class="text-sm font-bold text-jp-sumi">通知</h4>
+            <p id="toastMessage" class="text-xs text-jp-slate mt-1"></p>
+        </div>
+    </div>
+
+    <!-- 頁尾 -->
+    <footer class="border-t border-jp-border bg-white py-6 text-sm text-center text-jp-slate mt-12">
+        <p class="font-bold">© 2026 油綜飛鏢機 智能管理系統. All Rights Reserved.</p>
+        <p class="mt-1 font-sans">飛鏢機智能借用管理系統 ∙ 設計貼合中心日常運營</p>
+    </footer>
+
+    <!-- JS Logic -->
+    <script>
+        // 全域狀態管理
+        let bookings = [];
+        let lastMinutes = -1;
+        let isSheetUnlocked = false;
+
+        // 預設今日示範數據
+        const DEFAULT_BOOKINGS = [
+            {
+                id: "mock-1",
+                date: getTodayDateString(),
+                startTime: "16:00",
+                endTime: "16:30",
+                machine: "A",
+                memberId: "DM2605-001",
+                memberName: "陳大文",
+                groupSize: 1,
+                renew: true,
+                remarks: "即場登記",
+                isActive: false,
+                isCompleted: true
+            },
+            {
+                id: "mock-2",
+                date: getTodayDateString(),
+                startTime: "19:30",
+                endTime: "20:00",
+                machine: "A",
+                memberId: "DM2605-002",
+                memberName: "張小明",
+                groupSize: 1,
+                renew: false,
+                remarks: "即場登記",
+                isActive: false,
+                isCompleted: false
+            },
+            {
+                id: "mock-3",
+                date: getTodayDateString(),
+                startTime: "20:00",
+                endTime: "20:30",
+                machine: "B",
+                memberId: "DM2605-003",
+                memberName: "李美華",
+                groupSize: 1,
+                renew: false,
+                remarks: "即場登記",
+                isActive: false,
+                isCompleted: false
+            }
+        ];
+
+        // 初始化系統
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            
+            const saved = localStorage.getItem('dart_bookings');
+            if (saved) {
+                bookings = JSON.parse(saved);
+            } else {
+                bookings = [...DEFAULT_BOOKINGS];
+                saveToLocalStorage();
+            }
+
+            const gateSession = sessionStorage.getItem('dart_sheet_unlocked');
+            if (gateSession === 'true') {
+                isSheetUnlocked = true;
+                applySheetGateVisibility();
+            }
+
+            const todayStr = getTodayDateString();
+            document.getElementById('bookDate').value = todayStr;
+            document.getElementById('filterDate').value = todayStr;
+            onDateChange();
+
+            setInterval(updateClock, 1000);
+            updateClock();
+            
+            renderDashboard();
+            renderSheetTable();
+
+            setInterval(checkActiveSessions, 1000);
+            checkActiveSessions();
+
+            document.getElementById('gatePassword').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    verifyGatePassword();
+                }
+            });
+        });
+
+        // 取得今日日期字串
+        function getTodayDateString() {
+            const d = new Date();
+            return d.toISOString().split('T')[0];
+        }
+
+        function getDayOfWeekValue(dateStr) {
+            const d = new Date(dateStr);
+            return d.getDay();
+        }
+
+        function getDayOfWeekString(dateStr) {
+            const days = ["日", "一", "二", "三", "四", "五", "六"];
+            return days[getDayOfWeekValue(dateStr)];
+        }
+
+        function isCurrentlyOpen() {
+            const now = new Date();
+            const day = now.getDay();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const timeVal = hours * 60 + minutes;
+
+            if (day === 1 || day === 2) {
+                return (timeVal >= 960 && timeVal < 1050);
+            } else if (day >= 3 && day <= 6) {
+                return (timeVal >= 1170 && timeVal < 1290);
+            }
+            return false;
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const date = now.getDate();
+            const dayOfWeek = getDayOfWeekString(now.toISOString().split('T')[0]);
+            const timeStr = now.toTimeString().split(' ')[0];
+            document.getElementById('liveClock').textContent = `${year}年${month}月${date}日 (${dayOfWeek}) ${timeStr}`;
+        }
+
+        function onDateChange() {
+            const dateVal = document.getElementById('bookDate').value;
+            const timeSelect = document.getElementById('bookTime');
+            const notice = document.getElementById('timeSlotNotice');
+            
+            if (!dateVal) return;
+
+            const day = new Date(dateVal).getDay();
+            let slots = [];
+            
+            timeSelect.innerHTML = '';
+            notice.classList.add('hidden');
+
+            if (day === 1 || day === 2) {
+                slots = ["16:00", "16:30", "17:00"];
+                notice.textContent = "今日即場開放時間：16:00 – 17:30";
+                notice.classList.remove('hidden');
+            } else if (day >= 3 && day <= 6) {
+                slots = ["19:30", "20:00", "20:30", "21:00"];
+                notice.textContent = "今日即場開放時間：19:30 – 21:30";
+                notice.classList.remove('hidden');
+            } else {
+                timeSelect.innerHTML = `<option value="">⚠️ 今天不開放</option>`;
+                notice.textContent = "警告：今日（星期日）飛鏢房不開放！";
+                notice.classList.remove('hidden');
+                return;
+            }
+
+            slots.forEach(time => {
+                const opt = document.createElement('option');
+                opt.value = time;
+                opt.textContent = `${time} - ${calculateEndTime(time)}`;
+                timeSelect.appendChild(opt);
+            });
+        }
+
+        function calculateEndTime(startTime) {
+            const [h, m] = startTime.split(':').map(Number);
+            let endM = m + 30;
+            let endH = h;
+            if (endM >= 60) {
+                endM = 0;
+                endH += 1;
+            }
+            return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+        }
+
+        function getPeopleInSlot(date, time, machine) {
+            return bookings.filter(b => b.date === date && b.startTime === time && b.machine === machine && !b.isCompleted);
+        }
+
+        function updateSlotCapacityNotice() {
+            const date = document.getElementById('bookDate').value;
+            const time = document.getElementById('bookTime').value;
+            const machine = document.getElementById('bookMachine').value;
+            const noticeEl = document.getElementById('sharedNotice');
+
+            if (!date || !time) {
+                noticeEl.classList.add('hidden');
+                return;
+            }
+
+            let machinesToCheck = (machine === 'any') ? ['A', 'B'] : [machine];
+            let message = "";
+            let isShared = false;
+
+            machinesToCheck.forEach(m => {
+                const currentUsers = getPeopleInSlot(date, time, m);
+                const count = currentUsers.length;
+                if (count > 0) {
+                    isShared = true;
+                    const names = currentUsers.map(u => `<b>${u.memberName}</b>`).join('、');
+                    const remaining = 4 - count;
+                    message += `<li class="ml-4 list-disc"><b>飛鏢機 ${m}</b>：已由 ${names} 登記 (此時段僅剩餘 <b>${remaining}</b> 個個人名額)</li>`;
+                }
+            });
+
+            if (isShared) {
+                noticeEl.innerHTML = `
+                    <div class="bg-jp-indigoLight border border-jp-indigo/20 text-jp-sumi p-4 rounded-xl text-sm space-y-2">
+                        <p class="font-bold flex items-center gap-1.5 text-jp-indigo">
+                            <i data-lucide="users" class="w-5 h-5"></i> 👥 同意拼機共享提醒：
+                        </p>
+                        <p class="leading-relaxed">今日您選擇的時間段已有其他會員進行登記：</p>
+                        <ul class="space-y-1">${message}</ul>
+                        <p class="text-xs text-jp-slate border-t border-jp-border pt-2 mt-1.5">
+                            提示：如您提交登記，將與上述會員共同投擲，請遵守禮儀並相互交流切磋！
+                        </p>
+                    </div>
+                `;
+                noticeEl.classList.remove('hidden');
+                lucide.createIcons();
+            } else {
+                noticeEl.classList.add('hidden');
+            }
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('dart_bookings', JSON.stringify(bookings));
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('block'));
+            
+            document.getElementById(tabId).classList.add('block');
+            document.getElementById(tabId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('text-jp-indigo', 'border-jp-indigo');
+                btn.classList.add('text-jp-slate', 'border-transparent');
+            });
+
+            const activeBtn = document.getElementById(`btn-${tabId}`);
+            activeBtn.classList.add('text-jp-indigo', 'border-jp-indigo');
+            activeBtn.classList.remove('text-jp-slate', 'border-transparent');
+
+            if (tabId === 'sheetTab' && !isSheetUnlocked) {
+                setTimeout(() => {
+                    document.getElementById('gatePassword').focus();
+                }, 100);
+            }
+        }
+
+        function verifyGatePassword() {
+            const passwordField = document.getElementById('gatePassword');
+            const passVal = passwordField.value;
+
+            if (passVal === '0335') {
+                isSheetUnlocked = true;
+                sessionStorage.setItem('dart_sheet_unlocked', 'true');
+                applySheetGateVisibility();
+                passwordField.value = '';
+                showNotification("認證成功", "已成功解鎖飛鏢登記記錄表，您現在可自由瀏覽與匯出存檔數據。", "success");
+            } else {
+                const gateBox = document.getElementById('passwordGate');
+                gateBox.classList.add('animate-bounce');
+                setTimeout(() => {
+                    gateBox.classList.remove('animate-bounce');
+                }, 500);
+                passwordField.value = '';
+                passwordField.focus();
+                showNotification("密碼錯誤", "驗證失敗！輸入的飛鏢認證密碼不正確，請重新輸入。", "error");
+            }
+        }
+
+        function applySheetGateVisibility() {
+            const gate = document.getElementById('passwordGate');
+            const content = document.getElementById('securedSheetContent');
+            if (isSheetUnlocked) {
+                gate.classList.add('hidden');
+                content.classList.remove('hidden');
+            } else {
+                gate.classList.remove('hidden');
+                content.classList.add('hidden');
+            }
+            lucide.createIcons();
+        }
+
+        function lockSheetGate() {
+            isSheetUnlocked = false;
+            sessionStorage.removeItem('dart_sheet_unlocked');
+            applySheetGateVisibility();
+            showNotification("登記表已上鎖", "您已主動將借用登記表安全鎖定。", "success");
+            setTimeout(() => {
+                document.getElementById('gatePassword').focus();
+            }, 100);
+        }
+
+        function showNotification(title, message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            const tTitle = document.getElementById('toastTitle');
+            const tMsg = document.getElementById('toastMessage');
+
+            tTitle.textContent = title;
+            tMsg.textContent = message;
+
+            if (type === 'success') {
+                icon.className = "p-1.5 rounded bg-jp-matchaLight text-jp-matcha border border-jp-matcha/20";
+                icon.innerHTML = `<i data-lucide="check" class="w-5 h-5"></i>`;
+                toast.className = "fixed bottom-6 right-6 z-50 bg-white border border-jp-matcha/30 p-4 rounded-xl shadow-xl flex items-start gap-3 max-w-sm transform translate-y-0 opacity-100 transition-all duration-300";
+            } else {
+                icon.className = "p-1.5 rounded bg-jp-sakuraLight text-jp-sakura border border-jp-sakura/20";
+                icon.innerHTML = `<i data-lucide="alert-triangle" class="w-5 h-5"></i>`;
+                toast.className = "fixed bottom-6 right-6 z-50 bg-white border border-jp-sakura/30 p-4 rounded-xl shadow-xl flex items-start gap-3 max-w-sm transform translate-y-0 opacity-100 transition-all duration-300";
+            }
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-20');
+            }, 5500);
+        }
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+
+            const date = document.getElementById('bookDate').value;
+            let machine = document.getElementById('bookMachine').value;
+            const memberName = document.getElementById('memberName').value.trim();
+            const memberId = document.getElementById('memberId').value.trim();
+            const startTime = document.getElementById('bookTime').value;
+            const size = 1;
+
+            if (!startTime) {
+                showNotification("登記失敗", "請選擇一個有效的即場借用時段！", "error");
+                return;
+            }
+
+            if (machine === "any") {
+                const countA = getPeopleInSlot(date, startTime, "A").length;
+                const countB = getPeopleInSlot(date, startTime, "B").length;
+                
+                if (countA + size <= 4 && (countA <= countB || countB + size > 4)) {
+                    machine = "A";
+                } else if (countB + size <= 4) {
+                    machine = "B";
+                } else {
+                    showNotification("登記失敗", `很抱歉，兩部飛鏢機今日此時段的登記人數均已滿 (上限 4 人)！`, "error");
+                    return;
+                }
+            }
+
+            const existingBookings = getPeopleInSlot(date, startTime, machine);
+            const currentTotal = existingBookings.length;
+
+            if (currentTotal + size > 4) {
+                showNotification(
+                    "登記失敗：時段已滿員", 
+                    `飛鏢機 ${machine} 今日此時段已有 ${currentTotal} 人登記。已達到每台機 4 人共用上限！`, 
+                    "error"
+                );
+                return;
+            }
+
+            const endTime = calculateEndTime(startTime);
+
+            const newBooking = {
+                id: "booking-" + Date.now(),
+                date,
+                startTime,
+                endTime,
+                machine,
+                memberId,
+                memberName,
+                groupSize: size,
+                renew: false,
+                remarks: "即場登記",
+                isActive: false,
+                isCompleted: false
+            };
+
+            bookings.push(newBooking);
+            saveToLocalStorage();
+
+            const isShared = currentTotal > 0;
+            let msg = `成功即場登記 飛鏢機 ${machine} ${startTime} 時段！`;
+            if (isShared) {
+                const partnerNames = existingBookings.map(u => u.memberName).join('、');
+                msg += ` ⚠️ 提醒：此時段您將與 ${partnerNames} 拼機共同使用。`;
+            }
+
+            document.getElementById('memberName').value = '';
+            document.getElementById('memberId').value = '';
+            document.getElementById('checkEligibility').checked = false;
+            updateSlotCapacityNotice();
+
+            showNotification("登記成功", msg, "success");
+            
+            renderDashboard();
+            renderSheetTable();
+        }
+
+        function checkActiveSessions() {
+            const todayStr = getTodayDateString();
+            const now = new Date();
+            const currentHours = now.getHours();
+            const currentMinutes = now.getMinutes();
+            const currentTimeVal = currentHours * 60 + currentMinutes;
+
+            let changes = false;
+
+            bookings.forEach(b => {
+                if (b.date === todayStr && !b.isCompleted) {
+                    const [sh, sm] = b.startTime.split(':').map(Number);
+                    const [eh, em] = b.endTime.split(':').map(Number);
+                    const startVal = sh * 60 + sm;
+                    const endVal = eh * 60 + em;
+
+                    if (currentTimeVal >= startVal && currentTimeVal < endVal) {
+                        if (!b.isActive) {
+                            b.isActive = true;
+                            changes = true;
+                        }
+                    } else if (currentTimeVal >= endVal) {
+                        if (b.isActive || !b.isCompleted) {
+                            b.isActive = false;
+                            b.isCompleted = true;
+                            changes = true;
+                        }
+                    }
+                }
+            });
+
+            if (changes) {
+                saveToLocalStorage();
+                renderSheetTable();
+                renderDashboard();
+            } else if (currentMinutes !== lastMinutes) {
+                lastMinutes = currentMinutes;
+                renderDashboard();
+            }
+        }
+
+        function renderDashboard() {
+            const todayStr = getTodayDateString();
+            
+            const activeA = bookings.filter(b => b.date === todayStr && b.machine === "A" && b.isActive && !b.isCompleted);
+            const activeB = bookings.filter(b => b.date === todayStr && b.machine === "B" && b.isActive && !b.isCompleted);
+            const todayA = bookings.filter(b => b.date === todayStr && b.machine === "A");
+            const todayB = bookings.filter(b => b.date === todayStr && b.machine === "B");
+
+            renderMachineStatus('A', activeA, todayA);
+            renderMachineStatus('B', activeB, todayB);
+        }
+
+        function renderMachineStatus(machine, activeList, todayList) {
+            const statusEl = document.getElementById(`statusBadge-${machine}`);
+            const userBoxEl = document.getElementById(`activeUserBox-${machine}`);
+            const scheduleEl = document.getElementById(`todayScheduleList-${machine}`);
+            const color = machine === 'A' ? 'jp-indigo' : 'jp-matcha';
+
+            if (activeList.length > 0) {
+                statusEl.innerHTML = `<span class="w-3 h-3 rounded-full bg-${color} animate-pulse"></span> ⚡ 投擲中`;
+                statusEl.className = `mt-2 px-3 py-1 rounded text-sm font-bold flex items-center justify-center space-x-1 bg-${color === 'jp-indigo' ? 'jp-indigoLight' : 'jp-matchaLight'} text-${color}`;
+            } else {
+                statusEl.innerHTML = `<span class="text-lg">✓</span> 空閒中`;
+                statusEl.className = `mt-2 px-3 py-1 rounded text-sm font-bold flex items-center justify-center space-x-1 bg-${color === 'jp-indigo' ? 'jp-indigoLight' : 'jp-matchaLight'} text-${color}`;
+            }
+
+            userBoxEl.innerHTML = activeList.length > 0 
+                ? activeList.map(u => `<div class="text-sm font-bold text-${color}">⚡ ${u.memberName}</div>`).join('')
+                : `<div class="text-sm text-jp-slate">暫無使用者</div>`;
+
+            scheduleEl.innerHTML = todayList.length > 0
+                ? todayList.map(b => `
+                    <div class="text-xs bg-jp-bg border border-jp-border/50 px-2.5 py-2 rounded-lg font-mono">
+                        <span class="font-bold">${b.startTime}-${b.endTime}</span> ${b.memberName}
+                    </div>
+                `).join('')
+                : `<div class="text-xs text-jp-slate">今日暫無登記</div>`;
+        }
+
+        function renderSheetTable() {
+            if (!isSheetUnlocked) return;
+
+            const filterDate = document.getElementById('filterDate').value;
+            const filterMachine = document.getElementById('filterMachine').value;
+
+            let filtered = bookings.filter(b => {
+                let dateMatch = !filterDate || b.date === filterDate;
+                let machineMatch = filterMachine === 'all' || b.machine === filterMachine;
+                return dateMatch && machineMatch;
+            });
+
+            const tbody = document.getElementById('sheetTableBody');
+            tbody.innerHTML = filtered.length > 0 ? filtered.map(b => `
+                <tr>
+                    <td class="p-3.5">${b.date}</td>
+                    <td class="p-3.5">${b.startTime}</td>
+                    <td class="p-3.5">飛鏢機 ${b.machine}</td>
+                    <td class="p-3.5">${b.memberId}</td>
+                    <td class="p-3.5">${b.memberName}</td>
+                    <td class="p-3.5 text-center">${b.groupSize}</td>
+                    <td class="p-3.5 text-center">${b.renew ? '✓' : '-'}</td>
+                    <td class="p-3.5">${b.remarks}</td>
+                    <td class="p-3.5 text-center"><button onclick="deleteBooking('${b.id}')" class="text-jp-sakura hover:text-jp-sakura/70 text-sm">刪除</button></td>
+                </tr>
+            `).join('') : '<tr><td colspan="9" class="p-3.5 text-center text-jp-slate">無記錄</td></tr>';
+
+            const mobileView = document.getElementById('mobileSheetView');
+            mobileView.innerHTML = filtered.length > 0 ? filtered.map(b => `
+                <div class="bg-jp-bg border border-jp-border rounded-lg p-4 space-y-2">
+                    <div class="flex justify-between items-start gap-2">
+                        <div class="text-xs font-bold text-jp-slate">${b.date} ${b.startTime}</div>
+                        <button onclick="deleteBooking('${b.id}')" class="text-jp-sakura text-xs font-bold">刪除</button>
+                    </div>
+                    <div class="text-sm font-bold text-jp-sumi">${b.memberName}</div>
+                    <div class="text-xs text-jp-slate">飛鏢機 ${b.machine} • ${b.memberId}</div>
+                </div>
+            `).join('') : '<div class="text-center text-jp-slate py-8">無記錄</div>';
+        }
+
+        function deleteBooking(id) {
+            if (confirm('確認刪除此筆登記？')) {
+                bookings = bookings.filter(b => b.id !== id);
+                saveToLocalStorage();
+                renderSheetTable();
+                renderDashboard();
+                showNotification("已刪除", "登記記錄已成功移除。", "success");
+            }
+        }
+
+        function clearFilters() {
+            document.getElementById('filterDate').value = getTodayDateString();
+            document.getElementById('filterMachine').value = 'all';
+            renderSheetTable();
+        }
+
+        function resetMockData() {
+            if (confirm('確認還原測試數據？此操作將清除所有現有登記紀錄。')) {
+                bookings = [...DEFAULT_BOOKINGS];
+                saveToLocalStorage();
+                renderSheetTable();
+                renderDashboard();
+                showNotification("已還原", "測試數據已還原成功。", "success");
+            }
+        }
+
+        function exportToExcel() {
+            const ws = XLSX.utils.json_to_sheet(bookings.map(b => ({
+                '登記日期': b.date,
+                '開始時間': b.startTime,
+                '結束時間': b.endTime,
+                '飛鏢機': `飛鏢機 ${b.machine}`,
+                '登記編號': b.memberId,
+                '會員姓名': b.memberName,
+                '人數': b.groupSize,
+                '續借': b.renew ? '是' : '否',
+                '備註': b.remarks
+            })));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '全部登記');
+            XLSX.writeFile(wb, '飛鏢機登記表_全部.xlsx');
+            showNotification("已匯出", "全部 Excel 檔案匯出成功！", "success");
+        }
+
+        function exportTodayRecords() {
+            const todayStr = getTodayDateString();
+            const todayData = bookings.filter(b => b.date === todayStr);
+            const ws = XLSX.utils.json_to_sheet(todayData.map(b => ({
+                '開始時間': b.startTime,
+                '飛鏢機': `飛鏢機 ${b.machine}`,
+                '登記編號': b.memberId,
+                '會員姓名': b.memberName,
+                '人數': b.groupSize,
+                '備註': b.remarks
+            })));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, '今日登記');
+            XLSX.writeFile(wb, `飛鏢機登記表_${todayStr}.xlsx`);
+            showNotification("已匯出", "今日登記記錄已匯出成功！", "success");
+        }
+    </script>
+
+</body>
+</html>
